@@ -1,4 +1,5 @@
 ﻿using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace server;
@@ -12,11 +13,9 @@ public class ChatClient(
 
     public async Task Listen(CancellationToken cancellationToken)
     {
-        while (client.Connected)
-        {
-            string message = (await _reader.ReadLineAsync(cancellationToken))!;
+        await foreach(string message in ReceiveLines(cancellationToken))
             await server.Broadcast(this, message);
-        }
+
         Console.WriteLine("Closed connection");
     }
 
@@ -31,5 +30,12 @@ public class ChatClient(
         _writer.Dispose();
         _reader.Dispose();
         client.Dispose();
+    }
+
+    public async IAsyncEnumerable<string> ReceiveLines([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        string? line;
+        while ((line = await _reader.ReadLineAsync(cancellationToken)) != null)
+            yield return line;
     }
 }

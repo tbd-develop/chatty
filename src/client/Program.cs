@@ -17,10 +17,7 @@ string name = Console.ReadLine();
 
 Task.Factory.StartNew(async () =>
 {
-    while (client.Connected)
-    {
-        string response = (await reader.ReadLineAsync())!;
-
+    await foreach(string response in ReceiveLines(reader)) {
         Console.WriteLine();
         Console.WriteLine(response);
     }
@@ -37,4 +34,11 @@ while (true)
 
     writer.WriteLine($"[{name}]:{input}");
     writer.Flush();
+}
+
+async IAsyncEnumerable<string> ReceiveLines(StreamReader reader)
+{
+    string? line;
+    while ((line = await reader.ReadLineAsync()) != null)
+        yield return line;
 }
