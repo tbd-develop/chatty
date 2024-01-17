@@ -8,47 +8,37 @@ using var client = new TcpClient();
 
 client.Connect(IPAddress.Loopback, 7007);
 
-bool running = true;
-
-using var stream = client.GetStream();
-
-var writeStream = stream;
+using var reader = new StreamReader(client.GetStream(), Encoding.UTF8);
+using var writer = new StreamWriter(client.GetStream(), Encoding.UTF8);
 
 Console.Write("Enter your name: ");
 
 string name = Console.ReadLine();
 
-Task.Factory.StartNew(() =>
+Task.Factory.StartNew(async () =>
 {
-    var data = new Byte[256];
-
-    int bytesRead;
-
-    while ((bytesRead = writeStream.Read(data, 0, data.Length)) > 0)
-    {
-        var responseData = Encoding.ASCII.GetString(data, 0, bytesRead);
-
-        if (bytesRead >= 256) continue;
-        
+    await foreach(string response in ReceiveLines(reader)) {
         Console.WriteLine();
-        Console.WriteLine(responseData);
+        Console.WriteLine(response);
     }
 });
 
-while (running)
+while (true)
 {
     Console.Write("Send: ");
 
     string input = Console.ReadLine();
 
     if (input == "exit")
-    {
-        running = false;
+        break;
 
-        continue;
-    }
+    writer.WriteLine($"[{name}]:{input}");
+    writer.Flush();
+}
 
-    var data = Encoding.UTF8.GetBytes($"[{name}]:{input}");
-
-    stream.Write(data, 0, data.Length);
+async IAsyncEnumerable<string> ReceiveLines(StreamReader reader)
+{
+    string? line;
+    while ((line = await reader.ReadLineAsync()) != null)
+        yield return line;
 }

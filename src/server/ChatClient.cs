@@ -1,4 +1,5 @@
 ﻿using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace server;
@@ -7,42 +8,34 @@ public class ChatClient(
     ChatServer server,
     TcpClient client) : IDisposable
 {
-    private Stream _stream = null!;
+    private StreamReader _reader = new(client.GetStream(), Encoding.UTF8);
+    private StreamWriter _writer = new(client.GetStream(), Encoding.UTF8);
 
     public async Task Listen(CancellationToken cancellationToken)
     {
-        _stream = client.GetStream();
+        await foreach(string message in ReceiveLines(cancellationToken))
+            await server.Broadcast(this, message);
 
-        var buffer = new byte[1024];
-        int bytesRead = 0;
-        StringBuilder input = new StringBuilder();
-
-        while ((bytesRead = await _stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
-        {
-            input.Append(Encoding.UTF8.GetString(buffer, 0, bytesRead));
-
-            if (bytesRead >= 1024) continue;
-
-            var content = input.ToString();
-
-            if (content.TrimEnd('\r', '\n').Length == 0) continue;
-
-            await server.Broadcast(this, content);
-
-            input.Clear();
-        }
+        Console.WriteLine("Closed connection");
     }
 
     public async Task Send(string message)
     {
-        var data = Encoding.UTF8.GetBytes(message);
-
-        await _stream.WriteAsync(data);
+        await _writer.WriteLineAsync(message);
+        _writer.Flush();
     }
 
     public void Dispose()
     {
-        _stream.Dispose();
+        _writer.Dispose();
+        _reader.Dispose();
         client.Dispose();
+    }
+
+    public async IAsyncEnumerable<string> ReceiveLines([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        string? line;
+        while ((line = await _reader.ReadLineAsync(cancellationToken)) != null)
+            yield return line;
     }
 }
